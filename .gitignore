@@ -1,0 +1,5 @@
+/shack
+*.test
+*.out
+.idea/
+.vscode/
