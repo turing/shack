@@ -80,7 +80,7 @@ func newRootCmd(app *App) *cobra.Command {
 	root.AddCommand(newAddCmd(app))
 	root.AddCommand(newRmCmd(app))
 	root.AddCommand(newListCmd(app))
-	root.AddCommand(newGcCmd(app))
+	root.AddCommand(newDropCmd(app))
 	root.AddCommand(newUpCmd(app))
 	root.AddCommand(newDownCmd(app))
 	root.AddCommand(newAttachCmd(app))

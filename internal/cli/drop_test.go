@@ -10,7 +10,7 @@ import (
 	"github.com/turing/shack/internal/caddyfile"
 )
 
-func TestGcDropsDeadEntries(t *testing.T) {
+func TestDropRemovesDeadEntries(t *testing.T) {
 	r := &stubRunner{responses: stubResponses{
 		"brew --version":                   {stdout: "Homebrew\n"},
 		"brew services list":               {stdout: "caddy started alice\n"},
@@ -33,8 +33,8 @@ func TestGcDropsDeadEntries(t *testing.T) {
 	_ = os.WriteFile(caddyfilePath, []byte(doc.Render()), 0644)
 
 	out := &bytes.Buffer{}
-	if err := app.RunGc(out); err != nil {
-		t.Fatalf("RunGc: %v", err)
+	if err := app.RunDrop(out); err != nil {
+		t.Fatalf("RunDrop: %v", err)
 	}
 	if !strings.Contains(out.String(), "dropped bar.localhost") {
 		t.Errorf("expected drop log, got: %q", out.String())
@@ -45,15 +45,15 @@ func TestGcDropsDeadEntries(t *testing.T) {
 	}
 }
 
-func TestGcNothingToDo(t *testing.T) {
+func TestDropNothingToDo(t *testing.T) {
 	r := &stubRunner{responses: stubResponses{
 		"brew --version":     {stdout: "Homebrew\n"},
 		"brew services list": {stdout: "caddy started alice\n"},
 	}}
 	app, _ := newTestApp(t, r)
 	out := &bytes.Buffer{}
-	if err := app.RunGc(out); err != nil {
-		t.Fatalf("RunGc: %v", err)
+	if err := app.RunDrop(out); err != nil {
+		t.Fatalf("RunDrop: %v", err)
 	}
 	if !strings.Contains(out.String(), "nothing to do") {
 		t.Errorf("expected 'nothing to do', got: %q", out.String())

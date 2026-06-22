@@ -132,7 +132,7 @@ func TestDefaultGroupSelectionOnlyDevPrefix(t *testing.T) {
 
 // TestReservedLabelsContainsExpected verifies the reserved set matches the spec.
 func TestReservedLabelsContainsExpected(t *testing.T) {
-	expected := []string{"add", "gc", "init", "list", "reload", "rm", "up", "status", "down", "attach"}
+	expected := []string{"add", "drop", "init", "list", "reload", "rm", "up", "status", "down", "attach"}
 	for _, label := range expected {
 		if _, ok := reservedLabels[label]; !ok {
 			t.Errorf("reservedLabels missing %q", label)

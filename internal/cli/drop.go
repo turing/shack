@@ -8,18 +8,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newGcCmd(app *App) *cobra.Command {
+func newDropCmd(app *App) *cobra.Command {
 	return &cobra.Command{
-		Use:   "gc",
+		Use:   "drop",
 		Short: "Drop registrations whose ports are no longer in use",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return app.RunGc(cmd.OutOrStdout())
+			return app.RunDrop(cmd.OutOrStdout())
 		},
 	}
 }
 
-func (a *App) RunGc(out io.Writer) error {
+func (a *App) RunDrop(out io.Writer) error {
 	if err := a.preflightTouchingCaddyfile(); err != nil {
 		return err
 	}
@@ -34,7 +34,7 @@ func (a *App) RunGc(out io.Writer) error {
 		}
 		dropped := a.sweepDead(&doc, os.Stderr)
 		if len(dropped) == 0 {
-			fmt.Fprintln(out, "gc: nothing to do")
+			fmt.Fprintln(out, "drop: nothing to do")
 			return nil
 		}
 		if err := a.saveDocument(doc, path); err != nil {

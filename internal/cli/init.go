@@ -86,7 +86,7 @@ func (e *execRunCmd) testRun(projectRoot, cmd string, stdout, stderr io.Writer) 
 // reservedLabels are the shack subcommand names that project
 // labels cannot collide with.
 var reservedLabels = map[string]struct{}{
-	"add": {}, "gc": {}, "init": {}, "list": {}, "reload": {},
+	"add": {}, "drop": {}, "init": {}, "list": {}, "reload": {},
 	"rm": {}, "up": {}, "status": {}, "down": {}, "attach": {},
 }
 
