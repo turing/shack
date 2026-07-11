@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/turing/shack/internal/config"
 	"github.com/turing/shack/internal/lifecycle"
 	"github.com/turing/shack/internal/proctree"
-	"github.com/spf13/cobra"
 )
 
 // Version is overridable at build time via `-ldflags "-X

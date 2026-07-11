@@ -9,8 +9,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/turing/shack/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/turing/shack/internal/config"
 )
 
 // tmuxAttacher abstracts the final exec into tmux so tests can fake it.

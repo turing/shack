@@ -5,8 +5,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/turing/shack/internal/validate"
 	"github.com/spf13/cobra"
+	"github.com/turing/shack/internal/validate"
 )
 
 func newRmCmd(app *App) *cobra.Command {

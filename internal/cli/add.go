@@ -6,8 +6,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/turing/shack/internal/validate"
 	"github.com/spf13/cobra"
+	"github.com/turing/shack/internal/validate"
 )
 
 func newAddCmd(app *App) *cobra.Command {

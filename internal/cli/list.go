@@ -6,9 +6,9 @@ import (
 	"os"
 	"sort"
 
+	"github.com/spf13/cobra"
 	"github.com/turing/shack/internal/caddyfile"
 	"github.com/turing/shack/internal/portcheck"
-	"github.com/spf13/cobra"
 )
 
 func newListCmd(app *App) *cobra.Command {

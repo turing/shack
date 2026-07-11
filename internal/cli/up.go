@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/turing/shack/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/turing/shack/internal/config"
 )
 
 func newUpCmd(app *App) *cobra.Command {
