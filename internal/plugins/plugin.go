@@ -8,14 +8,16 @@ type Plugin interface {
 	// plugin can handle the project (e.g. "package.json"). Used by init
 	// for project-root detection.
 	Markers() []string
-	// Suggest enumerates candidate (label, cmd) pairs for projectDir.
-	Suggest(projectDir string) ([]Suggestion, error)
+	// Suggest enumerates candidate (label, cmd) pairs for projectDir, plus any
+	// advisory warnings (plain text) the caller should surface to the user.
+	// Warnings carry no styling; presentation is the caller's responsibility.
+	Suggest(projectDir string) (suggestions []Suggestion, warnings []string, err error)
 }
 
 type Suggestion struct {
 	Label string
-	Cmd   string  // what shack will execute (e.g. "pnpm dev:server")
-	Body  string  // raw script body for display only (e.g. "tsx watch src/server.ts")
+	Cmd   string // what shack will execute (e.g. "pnpm dev:server")
+	Body  string // raw script body for display only (e.g. "tsx watch src/server.ts")
 }
 
 var registry []Plugin
@@ -25,21 +27,24 @@ var registry []Plugin
 func Register(p Plugin) { registry = append(registry, p) }
 
 // Collect runs every registered plugin against projectDir and returns the
-// union of suggestions plus any errors (one per failing plugin).
-func Collect(projectDir string) ([]Suggestion, []error) {
+// union of suggestions, the union of advisory warnings, plus any errors (one
+// per failing plugin).
+func Collect(projectDir string) ([]Suggestion, []string, []error) {
 	var (
-		all  []Suggestion
-		errs []error
+		all      []Suggestion
+		warnings []string
+		errs     []error
 	)
 	for _, p := range registry {
-		s, err := p.Suggest(projectDir)
+		s, w, err := p.Suggest(projectDir)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
 		all = append(all, s...)
+		warnings = append(warnings, w...)
 	}
-	return all, errs
+	return all, warnings, errs
 }
 
 // AllMarkers returns the union of every plugin's project-root markers.

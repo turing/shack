@@ -7,6 +7,40 @@ import (
 	"testing"
 )
 
+func TestPrintInitWarnings(t *testing.T) {
+	var buf bytes.Buffer
+	msg := "warning: multiple lockfiles found (pnpm-lock.yaml, package-lock.json)\n" +
+		"using pnpm — if commands fail, remove the stale lockfile"
+	printInitWarnings(&buf, []string{msg})
+	out := buf.String()
+	// On a non-TTY writer lipgloss strips styling, so the badge renders as
+	// plain " warning " text.
+	if !strings.Contains(out, "warning") {
+		t.Errorf("expected warning badge text in output, got %q", out)
+	}
+	// Every line of the message carries the bar prefix.
+	for _, want := range []string{
+		barChar + "  warning  multiple lockfiles found (pnpm-lock.yaml, package-lock.json)\n",
+		barChar + " using pnpm — if commands fail, remove the stale lockfile\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected line %q in output, got %q", want, out)
+		}
+	}
+	// Trailing blank line separates the warning from the following form.
+	if !strings.HasSuffix(out, "\n\n") {
+		t.Errorf("expected trailing blank line, got %q", out)
+	}
+}
+
+func TestPrintInitWarningsEmpty(t *testing.T) {
+	var buf bytes.Buffer
+	printInitWarnings(&buf, nil)
+	if buf.Len() != 0 {
+		t.Errorf("expected no output for empty warnings, got %q", buf.String())
+	}
+}
+
 func TestRenderFrameServing(t *testing.T) {
 	got := renderFrame([]svcView{{label: "dev:ui", phase: phaseServing, url: "demo.localhost"}}, 0)
 	if len(got) != 1 {

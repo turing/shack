@@ -267,7 +267,7 @@ func (a *App) RunInit(out, stderr io.Writer, projectRoot string, rc runCmd) erro
 	}
 
 	// ---- Step 4: plugin discovery (silent) ----
-	suggestions, _ := plugins.Collect(projectRoot)
+	suggestions, warnings, _ := plugins.Collect(projectRoot)
 	sort.Slice(suggestions, func(i, j int) bool {
 		return suggestions[i].Label < suggestions[j].Label
 	})
@@ -297,7 +297,7 @@ func (a *App) RunInit(out, stderr io.Writer, projectRoot string, rc runCmd) erro
 		form5 = huh.NewForm(
 			huh.NewGroup(
 				huh.NewMultiSelect[string]().
-					Title("Which commands should shack test for port binds?").
+					Title("Which commands should shack test for port binds? (space to select)").
 					Options(options...).
 					Value(&testLabels),
 				huh.NewText().
@@ -307,6 +307,9 @@ func (a *App) RunInit(out, stderr io.Writer, projectRoot string, rc runCmd) erro
 			),
 		)
 	}
+	// Surface plugin advisories (e.g. ambiguous lockfile state) styled to match
+	// the init flow, directly above the selection form.
+	printInitWarnings(out, warnings)
 	if err := form5.Run(); err != nil {
 		return err
 	}

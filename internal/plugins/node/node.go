@@ -351,13 +351,48 @@ func parseFirstToken(segment string) (binary string, cdDir string, args []string
 	return parts[0], "", parts[1:]
 }
 
+// statDotBin reports whether binary exists in dir/node_modules/.bin. os.Stat
+// (not Lstat) is used deliberately: pnpm symlinks .bin entries into the store,
+// and os.Stat follows the symlink to confirm the target exists.
+func statDotBin(dir, binary string) bool {
+	_, err := os.Stat(filepath.Join(dir, "node_modules", ".bin", binary))
+	return err == nil
+}
+
+// binaryInstalled reports whether binary is present in node_modules/.bin at
+// dir or any ancestor up to and including projectRoot. npm/yarn/pnpm hoist a
+// workspace's framework binaries to the repo-root node_modules/.bin, so a
+// workspace script (e.g. `vite dev`) must consult ancestor .bin directories,
+// mirroring Node module resolution. The walk is bounded at projectRoot and
+// never ascends above it. If dir lies outside projectRoot, only dir itself is
+// checked (preserving the prior single-directory behavior for path-escape
+// cases rather than walking to the filesystem root).
+func binaryInstalled(dir, projectRoot, binary string) bool {
+	if rel, err := filepath.Rel(projectRoot, dir); err != nil || strings.HasPrefix(rel, "..") {
+		return statDotBin(dir, binary)
+	}
+	for {
+		if statDotBin(dir, binary) {
+			return true
+		}
+		if dir == projectRoot {
+			return false
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
+}
+
 // isFrameworkBinary checks whether binary is a known framework binary
 // installed in node_modules/.bin, and applies per-framework subcommand rules.
-// rootDir is the project root where node_modules lives.
-func isFrameworkBinary(rootDir, binary string, args []string) bool {
-	// Check that the binary is actually installed.
-	binPath := filepath.Join(rootDir, "node_modules", ".bin", binary)
-	if _, err := os.Stat(binPath); err != nil {
+// dir is the directory the script runs in; projectRoot bounds the upward walk
+// for hoisted binaries.
+func isFrameworkBinary(dir, projectRoot, binary string, args []string) bool {
+	// Check that the binary is actually installed (here or hoisted upward).
+	if !binaryInstalled(dir, projectRoot, binary) {
 		return false
 	}
 
@@ -418,7 +453,7 @@ func findEntryFile(args []string, rootDir string) string {
 
 // recurseScript looks up scriptName in rootDir/package.json#scripts and
 // calls isServerScript on its command. Depth-limited to prevent cycles.
-func recurseScript(rootDir, scriptName string, depth int) bool {
+func recurseScript(rootDir, projectRoot, scriptName string, depth int) bool {
 	pkg, err := readPkg(rootDir)
 	if err != nil {
 		return false
@@ -427,20 +462,21 @@ func recurseScript(rootDir, scriptName string, depth int) bool {
 	if !ok {
 		return false
 	}
-	return isServerScript(rootDir, cmd, depth+1)
+	return isServerScript(rootDir, projectRoot, cmd, depth+1)
 }
 
 // recurseWorkspace reads <rootDir>/<dir>/package.json and calls
 // isServerScript on the named script's command.
-func recurseWorkspace(rootDir, dir, scriptName string, depth int) bool {
+func recurseWorkspace(rootDir, projectRoot, dir, scriptName string, depth int) bool {
 	wsDir := filepath.Join(rootDir, dir)
-	return recurseScript(wsDir, scriptName, depth)
+	return recurseScript(wsDir, projectRoot, scriptName, depth)
 }
 
 // isServerScript returns true if the script command (from package.json#scripts)
 // represents a server invocation. rootDir is the project root. depth is used
-// for cycle detection (max depth 5).
-func isServerScript(rootDir, scriptCmd string, depth int) bool {
+// for cycle detection (max depth 5). projectRoot bounds the upward .bin walk
+// for hoisted framework binaries.
+func isServerScript(rootDir, projectRoot, scriptCmd string, depth int) bool {
 	if depth >= 5 {
 		return false
 	}
@@ -492,7 +528,7 @@ func isServerScript(rootDir, scriptCmd string, depth int) bool {
 				scriptName = args[0]
 			}
 			if scriptName != "" {
-				if recurseScript(rootDir, scriptName, depth) {
+				if recurseScript(rootDir, projectRoot, scriptName, depth) {
 					return true
 				}
 			}
@@ -500,7 +536,7 @@ func isServerScript(rootDir, scriptCmd string, depth int) bool {
 		}
 
 		// Case A: direct framework binary.
-		if isFrameworkBinary(rootDir, binary, args) {
+		if isFrameworkBinary(rootDir, projectRoot, binary, args) {
 			return true
 		}
 
@@ -540,7 +576,7 @@ func isServerScript(rootDir, scriptCmd string, depth int) bool {
 		if scriptName == "" {
 			continue
 		}
-		if recurseWorkspace(rootDir, dir0, scriptName, depth) {
+		if recurseWorkspace(rootDir, projectRoot, dir0, scriptName, depth) {
 			return true
 		}
 	}
@@ -583,6 +619,36 @@ func detectPackageManager(projectDir string) string {
 	return "npm"
 }
 
+// multiLockfileWarning returns a two-line warning when projectDir holds more
+// than one package-manager lockfile: the found lockfiles on the first line,
+// the chosen manager and remedy on the second. Detection picks by fixed
+// priority, so a stale lockfile can silently select the wrong manager (e.g. a
+// leftover empty pnpm-lock.yaml in an npm repo yields failing `pnpm --filter`
+// commands). The lockfiles are named in detection-priority order. Returns ""
+// when fewer than two lockfiles are
+// present. pnpm-workspace.yaml is a workspace marker, not a lockfile, so it is
+// not counted — it coexists normally with pnpm-lock.yaml.
+func multiLockfileWarning(projectDir, chosenPM string) string {
+	lockfiles := []string{
+		"pnpm-lock.yaml",
+		"yarn.lock",
+		"bun.lockb",
+		"package-lock.json",
+	}
+	var found []string
+	for _, f := range lockfiles {
+		if _, err := os.Stat(filepath.Join(projectDir, f)); err == nil {
+			found = append(found, f)
+		}
+	}
+	if len(found) < 2 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"warning: multiple lockfiles found (%s)\nusing %s — if commands fail, remove the stale lockfile",
+		strings.Join(found, ", "), chosenPM)
+}
+
 // rootCmd builds the run-script invocation for the detected package
 // manager at the project root.
 func rootCmd(pm, label string) string {
@@ -620,18 +686,18 @@ func workspaceCmd(pm, wsName, label string) string {
 // The package manager is detected from lockfiles (pnpm-lock.yaml,
 // yarn.lock, bun.lockb, package-lock.json) and the resulting Cmd uses
 // the correct invocation form.
-func (*node) Suggest(projectDir string) ([]plugins.Suggestion, error) {
+func (*node) Suggest(projectDir string) ([]plugins.Suggestion, []string, error) {
 	root, err := readPkg(projectDir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	wsPaths, err := workspacePackagePaths(projectDir, root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var workspacePkgs []PackageJSON
 	for _, wsDir := range wsPaths {
@@ -643,13 +709,17 @@ func (*node) Suggest(projectDir string) ([]plugins.Suggestion, error) {
 	}
 
 	if !isServerEligible(root, workspacePkgs) {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	pm := detectPackageManager(projectDir)
+	var warnings []string
+	if w := multiLockfileWarning(projectDir, pm); w != "" {
+		warnings = append(warnings, w)
+	}
 	var out []plugins.Suggestion
 	for label, scriptBody := range root.Scripts {
-		if isServerScript(projectDir, scriptBody, 0) {
+		if isServerScript(projectDir, projectDir, scriptBody, 0) {
 			out = append(out, plugins.Suggestion{
 				Label: label,
 				Cmd:   rootCmd(pm, label),
@@ -663,7 +733,7 @@ func (*node) Suggest(projectDir string) ([]plugins.Suggestion, error) {
 		}
 		wsDir := wsPaths[i]
 		for label, scriptBody := range ws.Scripts {
-			if isServerScript(wsDir, scriptBody, 0) {
+			if isServerScript(wsDir, projectDir, scriptBody, 0) {
 				out = append(out, plugins.Suggestion{
 					Label: ws.Name + ":" + label,
 					Cmd:   workspaceCmd(pm, ws.Name, label),
@@ -672,7 +742,7 @@ func (*node) Suggest(projectDir string) ([]plugins.Suggestion, error) {
 			}
 		}
 	}
-	return out, nil
+	return out, warnings, nil
 }
 
 // workspacePackagePaths resolves workspace globs from pnpm-workspace.yaml
