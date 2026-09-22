@@ -10,7 +10,8 @@ shack up
 
 macOS resolves every `*.localhost` to `127.0.0.1` natively — no `/etc/hosts`, no DNS. shack drives Caddy + tmux and handles the rest. Ultra lightweight little groups of services are easy to manage.
 
-> macOS + Homebrew only.
+> [!IMPORTANT]
+> **macOS + Homebrew only.**
 
 ## Install
 
