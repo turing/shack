@@ -16,6 +16,13 @@ macOS resolves every `*.localhost` to `127.0.0.1` natively — no `/etc/hosts`, 
 ## Install
 
 ```sh
+brew install turing/tap/shack
+sudo caddy trust                     # one-time, see below
+```
+
+Or build from source:
+
+```sh
 brew install go caddy tmux           # build + runtime deps
 git clone https://github.com/turing/shack
 cd shack
